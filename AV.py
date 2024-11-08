@@ -1,59 +1,42 @@
-import tkinter as tk
-from PIL import Image, ImageTk
+import sys
 import requests
+from PIL import Image
 from io import BytesIO
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QGridLayout
 
 # Function to fetch SDSS image based on RA and DEC (updated for DR18)
 def fetch_sdss_image(ra, dec, scale=0.2, width=512, height=512):
-    # SDSS DR18 cutout service URL
     url = f"https://skyserver.sdss.org/dr18/SkyServerWS/ImgCutout/getjpeg?ra={ra}&dec={dec}&scale={scale}&width={width}&height={height}"
     response = requests.get(url)
-    
     if response.status_code == 200:
-        image = Image.open(BytesIO(response.content))
-        return image
+        return Image.open(BytesIO(response.content))
     else:
         print("Failed to fetch image.")
         return None
 
 # Function to get SDSS object ID based on RA and DEC
-def get_sdss_obj_id(ra, dec):
-    # Define the base URL for SDSS SQL Search
+def get_object_id(ra, dec):
     url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
-    
-    # Define the query with your parameters
     query = f"""
     SELECT TOP 1 objID
     FROM PhotoObj
     WHERE RA BETWEEN {ra} - 0.0001 AND {ra} + 0.0001
     AND DEC BETWEEN {dec} - 0.0001 AND {dec} + 0.0001
     """
-
-    # Parameters for the HTTP request
-    params = {
-        "cmd": query,
-        "format": "json"
-    }
-    
-    # Send the HTTP request
+    params = {"cmd": query, "format": "json"}
     response = requests.get(url, params=params)
-    
-    # Check if the request was successful
     if response.status_code == 200:
         data = response.json()
-        
-        # Access objID using your desired one-liner
         try:
-            obj_id = data[0]['Rows'][0]['objID']
-            return obj_id
+            return data[0]['Rows'][0]['objID']
         except (IndexError, KeyError):
-            print("No objID found or invalid response format.")
+            print("No objID found.")
             return None
-        
     else:
         print(f"Error: {response.status_code}")
         return None
-
 
 # Function to get detailed information of an object based on objID
 def get_object_info(obj_id):
@@ -79,73 +62,120 @@ def get_object_info(obj_id):
     # Check if the request was successful
     if response.status_code == 200:
         data = response.json()
-        
-        print(data)
-
-
-# Function to display the image and object ID in the label
-def display_image():
-    # Get the RA and DEC from the input fields
-    ra = ra_entry.get()
-    dec = dec_entry.get()
-    
-    try:
-        ra = float(ra)
-        dec = float(dec)
-    except ValueError:
-        print("Please enter valid numerical values for RA and DEC.")
-        return
-    
-    # Fetch and display the image
-    image = fetch_sdss_image(ra, dec)
-    if image:
-        # Fetch the SDSS object ID
-        obj_id = get_sdss_obj_id(ra, dec)
-        
-        get_object_info(obj_id)
-        
-        # Display the object ID only if the image is fetched successfully
-        if obj_id:
-            obj_id_label.config(text=f"Object ID: {obj_id}")
-        else:
-            obj_id_label.config(text="Object ID: Not found")
-        
-        # Display the image
-        tk_image = ImageTk.PhotoImage(image)
-        image_label.config(image=tk_image)
-        image_label.image = tk_image  # Keep a reference to avoid garbage collection
-        
-        # Show the object ID label
-        obj_id_label.grid(row=3, column=0, columnspan=2, pady=5)
+        try:
+            # Access the detailed object information
+            return data[0]['Rows'][0]
+        except (IndexError, KeyError):
+            print(f"No detailed information found for objID: {obj_id}")
+            return None
     else:
-        obj_id_label.config(text="Object ID: Not found")
-        obj_id_label.grid_forget()  # Hide the object ID label if image fetch fails
+        print(f"Error: {response.status_code}")
+        return None
 
-# Initialize the main window
-root = tk.Tk()
-root.title("SDSS Image Viewer - DR18")
 
-# RA input field
-tk.Label(root, text="RA:").grid(row=0, column=0, padx=5, pady=5)
-ra_entry = tk.Entry(root)
-ra_entry.grid(row=0, column=1, padx=5, pady=5)
+class SDSSImageViewer(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("SDSS Image Viewer - DR18")
 
-# DEC input field
-tk.Label(root, text="DEC:").grid(row=1, column=0, padx=5, pady=5)
-dec_entry = tk.Entry(root)
-dec_entry.grid(row=1, column=1, padx=5, pady=5)
+        # Set dark mode style
+        self.setStyleSheet("""
+        QWidget { background-color: #2e2e2e; color: white; }
+        QLabel { color: white; }
+        QLineEdit { background-color: #555555; color: white; border: 1px solid #444444; padding: 5px; }
+        QPushButton { background-color: #444444; color: white; border: 1px solid #333333; padding: 5px; }
+        QPushButton:hover { background-color: #666666; }
+        """)
 
-# Fetch button
-fetch_button = tk.Button(root, text="Fetch Image", command=display_image)
-fetch_button.grid(row=2, column=0, columnspan=2, pady=10)
+        self.initUI()
 
-# Object ID display label (initially hidden)
-obj_id_label = tk.Label(root, text="Object ID: ")
-obj_id_label.grid_forget()  # Hide the label initially
+    def initUI(self):
+        main_layout = QVBoxLayout()
+        
+        # RA and DEC input section
+        input_layout = QHBoxLayout()
+        ra_label = QLabel("RA (deg):")
+        self.ra_entry = QLineEdit()
+        self.ra_entry.setFixedWidth(80)
+        dec_label = QLabel("DEC (deg):")
+        self.dec_entry = QLineEdit()
+        self.dec_entry.setFixedWidth(80)
 
-# Image display label
-image_label = tk.Label(root)
-image_label.grid(row=4, column=0, columnspan=2)
+        input_layout.addStretch(1)
+        input_layout.addWidget(ra_label)
+        input_layout.addWidget(self.ra_entry)
+        input_layout.addWidget(dec_label)
+        input_layout.addWidget(self.dec_entry)
+        input_layout.addStretch(1)
+        
+        main_layout.addLayout(input_layout)
 
-# Start the Tkinter event loop
-root.mainloop()
+        # Fetch Button centered below input fields
+        button_layout = QHBoxLayout()
+        self.fetch_button = QPushButton("Fetch Image")
+        self.fetch_button.clicked.connect(self.display_image)
+        button_layout.addStretch(1)
+        button_layout.addWidget(self.fetch_button)
+        button_layout.addStretch(1)
+        
+        main_layout.addLayout(button_layout)
+
+        # Object ID label and image display (hidden initially)
+        self.obj_id_label = QLabel("")
+        self.obj_id_label.setAlignment(Qt.AlignCenter)
+        self.obj_id_label.setVisible(False)
+
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setVisible(False)
+
+        main_layout.addWidget(self.obj_id_label)
+        main_layout.addWidget(self.image_label)
+
+        self.setLayout(main_layout)
+
+    def display_image(self):
+        try:
+            ra = float(self.ra_entry.text())
+            dec = float(self.dec_entry.text())
+        except ValueError:
+            print("Please enter valid numerical values for RA and DEC.")
+            return
+
+        # Fetch and display the image
+        image = fetch_sdss_image(ra, dec)
+        if image:
+            obj_id = get_object_id(ra, dec)
+                        
+            if obj_id:
+                self.obj_id_label.setText(f"Object ID: {obj_id}")
+                self.obj_id_label.setVisible(True)
+            
+                obj_info = get_object_info(obj_id)
+            else:
+                self.obj_id_label.setText("Object ID: Not found")
+                self.obj_id_label.setVisible(True)
+
+            # Convert PIL image to QPixmap for display
+            image = image.convert("RGB")
+            data = image.tobytes("raw", "RGB")
+            qimage = QImage(data, image.width, image.height, image.width * 3, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(qimage)
+
+            # Display the image
+            self.image_label.setPixmap(pixmap.scaled(512, 512, Qt.KeepAspectRatio))
+            self.image_label.setVisible(True)
+        else:
+            self.obj_id_label.setText("Object ID: Not found")
+            self.obj_id_label.setVisible(True)
+            self.image_label.clear()
+            self.image_label.setVisible(False)
+
+def main():
+    app = QApplication(sys.argv)
+    viewer = SDSSImageViewer()
+    viewer.show()
+    sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    main()

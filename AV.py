@@ -1,15 +1,17 @@
+import threading
 import sys
 import os
 import requests
+import bz2
+import shutil
 from PIL import Image
 from io import BytesIO
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
 
-
-# Function to fetch SDSS image based on RA and DEC (updated for DR18)
-def fetch_sdss_image(ra, dec, scale=0.2, width=512, height=512):
+# Function to fetch SDSS image based on RA and DEC
+def fetch_sdss_image(ra, dec, scale=0.2, width=2048, height=1489):
     url = f"https://skyserver.sdss.org/dr18/SkyServerWS/ImgCutout/getjpeg?ra={ra}&dec={dec}&scale={scale}&width={width}&height={height}"
     response = requests.get(url)
     if response.status_code == 200:
@@ -42,7 +44,7 @@ def get_object_id(ra, dec):
         return None
 
 
-# Function to fetch run-camcol-field identifier based on RA and DEC
+# Function to fetch run-camcol-field identifier
 def get_run_camcol_field(ra, dec):
     url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
     query = f"""
@@ -65,19 +67,13 @@ def get_run_camcol_field(ra, dec):
         print(f"Error: {response.status_code}")
         return None
 
-# Function to get FITS file URLs for all filters based on run-camcol-field
+
+# Function to get FITS file URLs
 def get_fits_files(run_camcol_field):
     try:
-        # Parse the run-camcol-field string
         run, camcol, field = run_camcol_field.split("-")
-        
-        # Base URL for FITS files
         base_url = "https://dr18.sdss.org/sas/dr18/prior-surveys/sdss4-dr17-eboss/photoObj/frames/301"
-        
-        # Filters to download
         filters = ['u', 'g', 'r', 'i', 'z']
-        
-        # Construct URLs for each filter
         fits_urls = [
             f"{base_url}/{run}/{camcol}/frame-{flt}-{run.zfill(6)}-{camcol}-{field.zfill(4)}.fits.bz2"
             for flt in filters
@@ -87,30 +83,47 @@ def get_fits_files(run_camcol_field):
         print("Invalid run-camcol-field format.")
         return []
 
-
-# Function to download FITS files
-def download_fits_files(run_camcol_field):
+# Function to download and decompress FITS files
+def download_fits_files(run_camcol_field, callback=None):
     directory = run_camcol_field
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    fits_files = get_fits_files(run_camcol_field)
+    fits_files = get_fits_files(run_camcol_field)  # This should return a list of URLs
 
     for fits_url in fits_files:
-        print(f"Attempting to download: {fits_url}")
         try:
+            # Download the compressed file
             response = requests.get(fits_url, stream=True)
             if response.status_code == 200:
-                file_name = fits_url.split("/")[-1]
-                file_path = os.path.join(directory, file_name)
-                with open(file_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=5 * 1024 * 1024):
-                        f.write(chunk)
-                print(f"Downloaded: {file_name}")
+                compressed_file_name = fits_url.split("/")[-1]
+                decompressed_file_name = compressed_file_name.replace(".bz2", "")
+                file_path = os.path.join(directory, decompressed_file_name)
+
+                # Decompress and write directly to file
+                with bz2.BZ2File(response.raw, 'rb') as compressed_stream, open(file_path, 'wb') as decompressed_file:
+                    shutil.copyfileobj(compressed_stream, decompressed_file)
+
+                print(f"Downloaded and decompressed: {decompressed_file_name}")
             else:
                 print(f"Failed to download {fits_url} - HTTP {response.status_code}")
         except Exception as e:
             print(f"Error downloading {fits_url}: {e}")
+
+    if callback:
+        callback()
+
+# Thread class for FITS download
+class FITSDownloadThread(QThread):
+    finished_signal = pyqtSignal()
+
+    def __init__(self, run_camcol_field):
+        super().__init__()
+        self.run_camcol_field = run_camcol_field
+
+    def run(self):
+        download_fits_files(self.run_camcol_field)
+        self.finished_signal.emit()
 
 # SDSS Image Viewer Application
 class SDSSImageViewer(QWidget):
@@ -118,14 +131,8 @@ class SDSSImageViewer(QWidget):
         super().__init__()
         self.setWindowTitle("SDSS Image Viewer - DR18")
 
-        self.setStyleSheet("""
-        QWidget { background-color: #2e2e2e; color: white; }
-        QLabel { color: white; }
-        QLineEdit { background-color: #555555; color: white; border: 1px solid #444444; padding: 5px; }
-        QPushButton { background-color: #444444; color: white; border: 1px solid #333333; padding: 5px; }
-        QPushButton:hover { background-color: #666666; }
-        """)
         self.initUI()
+        self.download_thread = None
 
     def initUI(self):
         main_layout = QVBoxLayout()
@@ -158,15 +165,10 @@ class SDSSImageViewer(QWidget):
 
         self.obj_id_label = QLabel("")
         self.obj_id_label.setAlignment(Qt.AlignCenter)
-        self.obj_id_label.setVisible(False)
-
         self.run_camcol_field_label = QLabel("")
         self.run_camcol_field_label.setAlignment(Qt.AlignCenter)
-        self.run_camcol_field_label.setVisible(False)
-
-        self.image_label = QLabel()
+        self.image_label = QLabel("")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setVisible(False)
 
         main_layout.addWidget(self.obj_id_label)
         main_layout.addWidget(self.run_camcol_field_label)
@@ -187,43 +189,31 @@ class SDSSImageViewer(QWidget):
             obj_id = get_object_id(ra, dec)
             run_camcol_field = get_run_camcol_field(ra, dec)
 
-            if obj_id:
-                self.obj_id_label.setText(f"Object ID: {obj_id}")
-                self.obj_id_label.setVisible(True)
-            else:
-                self.obj_id_label.setText("Object ID: Not found")
-                self.obj_id_label.setVisible(True)
-
-            if run_camcol_field:
-                self.run_camcol_field_label.setText(f"Run-Camcol-Field: {run_camcol_field}")
-                self.run_camcol_field_label.setVisible(True)
-                download_fits_files(run_camcol_field)
-            else:
-                self.run_camcol_field_label.setText("Run-Camcol-Field: Not found")
-                self.run_camcol_field_label.setVisible(True)
+            self.obj_id_label.setText(f"Object ID: {obj_id or 'Not found'}")
+            self.run_camcol_field_label.setText(f"Run-Camcol-Field: {run_camcol_field or 'Not found'}")
 
             image = image.convert("RGB")
             data = image.tobytes("raw", "RGB")
             qimage = QImage(data, image.width, image.height, image.width * 3, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(qimage)
-
             self.image_label.setPixmap(pixmap.scaled(512, 512, Qt.KeepAspectRatio))
-            self.image_label.setVisible(True)
-        else:
-            self.obj_id_label.setText("Object ID: Not found")
-            self.obj_id_label.setVisible(True)
-            self.run_camcol_field_label.setText("Run-Camcol-Field: Not found")
-            self.run_camcol_field_label.setVisible(True)
-            self.image_label.clear()
-            self.image_label.setVisible(False)
 
+            if run_camcol_field:
+                self.start_download(run_camcol_field)
+
+    def start_download(self, run_camcol_field):
+        self.download_thread = FITSDownloadThread(run_camcol_field)
+        self.download_thread.finished_signal.connect(self.download_finished)
+        self.download_thread.start()
+
+    def download_finished(self):
+        print("FITS file download completed.")
 
 def main():
     app = QApplication(sys.argv)
     viewer = SDSSImageViewer()
     viewer.show()
     sys.exit(app.exec_())
-
 
 if __name__ == '__main__':
     main()

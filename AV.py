@@ -7,7 +7,8 @@ import sys
 
 from quick_look import QuickLook
 from fits_retrieval import FITSRetrieval
-
+from composite_creation import CompositeCreation
+from search import Search
 
 class AstroVision(QMainWindow):
     def __init__(self):
@@ -74,8 +75,12 @@ class AstroVision(QMainWindow):
         # Cards for navigation
         cards_layout = QGridLayout()
         modules = [
+            ("Search", self.open_search),
             ("Quick Look", self.open_quick_look),
             ("FITS Retrieval", self.open_fits_retrieval),
+            ("Composite Creation", self.open_composite_creation),
+            ("Image Enhancement", self.open_image_enhancement),
+            ("Spectrogram Inspector", self.open_spectrogram_inspector)
         ]
 
         for i, (name, action) in enumerate(modules):
@@ -84,8 +89,9 @@ class AstroVision(QMainWindow):
                 QPushButton {
                     background-color: #5A9;
                     color: white;
-                    font-size: 18px;
+                    font-size: 22px;
                     font-weight: bold;
+                    border: 1px solid #5A5A5A;
                     border-radius: 10px;
                     padding: 20px;
                 }
@@ -93,8 +99,10 @@ class AstroVision(QMainWindow):
                     background-color: #4A8;
                 }
             """)
+            
             card.clicked.connect(action)
-            card.setFixedSize(350, 150)
+            card.setFixedSize(400, 200)
+            
             cards_layout.addWidget(card, i // 3, i % 3)
         layout.addLayout(cards_layout)
 
@@ -105,6 +113,12 @@ class AstroVision(QMainWindow):
         tab_bar.setTabButton(0, QTabBar.RightSide, None)  # Remove close button
 
     # In the AstroVision class:
+    def open_search(self):
+        """Open the Search module in a new tab."""
+        search_tab = Search(self.tab_widget)
+        self.tab_widget.addTab(search_tab, "Search")
+        self.tab_widget.setCurrentWidget(search_tab)
+    
     def open_quick_look(self):
         """Open the Quick Look module in a new tab."""
         quick_look_tab = QuickLook(self.tab_widget)
@@ -116,6 +130,24 @@ class AstroVision(QMainWindow):
         fits_retrieval_tab = FITSRetrieval(self.tab_widget)
         self.tab_widget.addTab(fits_retrieval_tab, "FITS Retrieval")
         self.tab_widget.setCurrentWidget(fits_retrieval_tab)
+    
+    def open_composite_creation(self):
+        """Open the Composite Creation module in a new tab."""
+        composite_creation_tab = CompositeCreation(self.tab_widget)
+        self.tab_widget.addTab(composite_creation_tab, "Composite Creation")
+        self.tab_widget.setCurrentWidget(composite_creation_tab)
+    
+    def open_image_enhancement(self):
+        """Open the Image Enhancement module in a new tab."""
+        image_enhancement_tab = ImageEnhancement(self.tab_widget)
+        self.tab_widget.addTab(image_enhancement_tab, "Image Enhancement")
+        self.tab_widget.setCurrentWidget(image_enhancement_tab)
+    
+    def open_spectrogram_inspector(self):
+        """Open the Spectrogram Inspector module in a new tab."""
+        spectro_inspector_tab = SpectroInspector(self.tab_widget)
+        self.tab_widget.addTab(spectro_inspector_tab, "Spectrogram Inspector")
+        self.tab_widget.setCurrentWidget(spectro_inspector_tab)
     
     def close_tab(self, index):
         """Close a tab."""

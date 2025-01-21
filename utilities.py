@@ -59,33 +59,56 @@ def get_object_id(ra, dec):
     return None
 
 
-# Function to fetch object details based on Object ID
 def get_object_details(object_id):
     """
-    Fetch RA, DEC, magnitudes [u, g, r, i, z], and type for a given Object ID.
+    Fetch RA, DEC, magnitudes [u, g, r, i, z], SpecObj ID, redshift, and class for a given Object ID.
     """
-    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
-    query = f"""
-    SELECT TOP 1 ra, dec, u, g, r, i, z, type
+    # Query for photometric data from PhotoObj
+    photo_query = f"""
+    SELECT TOP 1 ra, dec, u, g, r, i, z
     FROM PhotoObj
     WHERE objID = {object_id}
     """
-    params = {"cmd": query, "format": "json"}
+    # Query for spectroscopic data from SpecObj
+    spec_query = f"""
+    SELECT TOP 1 specObjID, z, class
+    FROM SpecObj
+    WHERE bestObjID = {object_id}
+    """
     try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        row = data[0]['Rows'][0]
-        return {
-            "ra": row["ra"],
-            "dec": row["dec"],
-            "u": row["u"],
-            "g": row["g"],
-            "r": row["r"],
-            "i": row["i"],
-            "z": row["z"],
-            "type": get_object_type(row["type"]),
+        # Fetch data from PhotoObj
+        photo_response = requests.get(
+            "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch",
+            params={"cmd": photo_query, "format": "json"}
+        )
+        photo_response.raise_for_status()
+        photo_data = photo_response.json()
+        photo_row = photo_data[0]["Rows"][0]
+
+        # Fetch data from SpecObj
+        spec_response = requests.get(
+            "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch",
+            params={"cmd": spec_query, "format": "json"}
+        )
+        spec_response.raise_for_status()
+        spec_data = spec_response.json()
+        spec_row = spec_data[0]["Rows"][0]
+
+        # Combine data from both queries
+        object_details = {
+            "ra": photo_row["ra"],
+            "dec": photo_row["dec"],
+            "u": photo_row["u"],
+            "g": photo_row["g"],
+            "r": photo_row["r"],
+            "i": photo_row["i"],
+            "z": photo_row["z"],
+            "specObjID": spec_row["specObjID"],
+            "redshift": spec_row["z"],
+            "class": spec_row["class"],  # Star, Galaxy, Quasar
         }
+        return object_details
+
     except (IndexError, KeyError):
         print("No data found for the given Object ID.")
     except Exception as e:
@@ -93,30 +116,36 @@ def get_object_details(object_id):
     return None
 
 
-# Function to map SDSS type values to descriptions
-def get_object_type(type_value):
+# Function to fetch Run, Camcol, Field, and Rerun components
+def get_run_rerun_camcol_field(ra, dec):
     """
-    Map SDSS PhotoType values to their descriptions.
+    Fetch Run, Rerun, Camcol, and Field individually based on RA and DEC.
     """
-    type_mapping = {
-        0: "Unknown",
-        1: "Cosmic ray",
-        2: "Defect",
-        3: "Galaxy",
-        4: "Ghost",
-        5: "Known object",
-        6: "Star",
-        7: "Trail",
-        8: "Sky",
-        9: "Not a type",
-    }
-    return type_mapping.get(type_value, "Invalid type")
+    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
+    query = f"""
+    SELECT TOP 1 run, rerun, camcol, field
+    FROM PhotoObj
+    WHERE RA BETWEEN {ra} - 0.0001 AND {ra} + 0.0001
+    AND DEC BETWEEN {dec} - 0.0001 AND {dec} + 0.0001
+    """
+    params = {"cmd": query, "format": "json"}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        row = data[0]['Rows'][0]
+        return row["run"], row["rerun"], row["camcol"], row["field"]
+    except (IndexError, KeyError):
+        print("No Run-Camcol-Field components found for the given RA/DEC.")
+    except Exception as e:
+        print(f"Error fetching Run-Camcol-Field components: {e}")
+    return None, None, None, None
 
 
 # Function to query Run-Camcol-Field from RA/DEC
 def query_run_camcol_field(ra, dec):
     """
-    Query Run-Camcol-Field from RA/DEC coordinates.
+    Query Run-Camcol-Field, from RA/DEC coordinates.
     """
     url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
     query = f"""
@@ -139,14 +168,14 @@ def query_run_camcol_field(ra, dec):
     return None
 
 
-# Function to fetch Run-Camcol-Field components
-def get_run_camcol_field(ra, dec):
+# Function to query Run-Camcol-Field from RA/DEC
+def query_run_rerun_camcol_field(ra, dec):
     """
-    Fetch Run, Camcol, and Field individually based on RA and DEC.
+    Query Run-Rerun-Camcol-Field, from RA/DEC coordinates.
     """
     url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
     query = f"""
-    SELECT TOP 1 run, camcol, field
+    SELECT TOP 1 run, rerun, camcol, field
     FROM PhotoObj
     WHERE RA BETWEEN {ra} - 0.0001 AND {ra} + 0.0001
     AND DEC BETWEEN {dec} - 0.0001 AND {dec} + 0.0001
@@ -157,12 +186,12 @@ def get_run_camcol_field(ra, dec):
         response.raise_for_status()
         data = response.json()
         row = data[0]['Rows'][0]
-        return row["run"], row["camcol"], row["field"]
+        return f"{row['run']}-{row['rerun']}-{row['camcol']}-{row['field']}"
     except (IndexError, KeyError):
-        print("No Run-Camcol-Field components found for the given RA/DEC.")
+        print("No Run-Camcol-Field found for the given RA/DEC.")
     except Exception as e:
-        print(f"Error fetching Run-Camcol-Field components: {e}")
-    return None, None, None
+        print(f"Error querying Run-Camcol-Field: {e}")
+    return None
 
 
 # Function to get FITS file URLs

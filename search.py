@@ -58,7 +58,10 @@ class Search(QWidget):
             "Field": "p.field",
             "SpecObj ID": "s.specobjid",
             "Class": "s.class",
-            "Redshift": "s.z"
+            "Redshift": "s.z",
+            "Plate": "s.plate",
+            "MJD": "s.mjd",
+            "Fiber ID": "s.fiberid"
         }
         
         self.REVERSE_COLUMN_MAPPING = {v: k for k, v in self.COLUMN_MAPPING.items()}
@@ -207,10 +210,10 @@ class Search(QWidget):
         # Results Table
         self.results_table = QTableWidget()
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.results_table.setColumnCount(16)
+        self.results_table.setColumnCount(19)
         self.results_table.setHorizontalHeaderLabels([
             "Image", "Object ID", "RA", "DEC", "u-band", "g-band", "r-band", "i-band", "z-band",
-            "Run", "Rerun", "Camcol", "Field", "SpecObj ID", "Class", "Redshift"
+            "Run", "Rerun", "Camcol", "Field", "SpecObj ID", "Class", "Redshift", "Plate", "MJD", "Fiber ID"
         ])
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.setStyleSheet("color: white; font-size: 14px; background-color: #3A3A3A; gridline-color: #5A9;")
@@ -263,6 +266,11 @@ class Search(QWidget):
             if not value:
                 QMessageBox.warning(self, "Input Error", "Please enter a value for the condition.")
                 return
+            
+            # Add double quotes around the value if the field is 'Class'
+            if field_display == "Class":
+                value = f'"{value.upper()}"'
+                
             condition = f"{field_sql} {operator} {value}"
             user_friendly_condition = f"{field_display} {operator} {value}"
 
@@ -301,7 +309,8 @@ class Search(QWidget):
         SELECT TOP {results_limit}
             p.objid, p.ra, p.dec, p.u, p.g, p.r, p.i, p.z, 
             p.run, p.rerun, p.camcol, p.field, 
-            s.specobjid, s.class, s.z as redshift
+            s.specobjid, s.class, s.z as redshift,
+            s.plate, s.mjd, s.fiberid
         FROM PhotoObj AS p
         JOIN SpecObj AS s ON s.bestobjid = p.objid
         WHERE {where_clause}
@@ -337,7 +346,8 @@ class Search(QWidget):
             # Populate table data, starting from the second column
             for col_idx, col_name in enumerate([
                 "objid", "ra", "dec", "u", "g", "r", "i", "z",
-                "run", "rerun", "camcol", "field", "specobjid", "class", "redshift"
+                "run", "rerun", "camcol", "field", "specobjid",
+                "class", "redshift", "plate", "mjd", "fiberid"
             ]):
                 value = row.get(col_name, "")
                 self.results_table.setItem(row_idx, col_idx + 1, QTableWidgetItem(str(value)))  # Shift by +1 for image column

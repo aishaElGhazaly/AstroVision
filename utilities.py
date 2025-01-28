@@ -116,38 +116,6 @@ def get_object_details(object_id):
     return None
 
 
-# Function to get SpecObjID based on RA and DEC
-def get_specobj_id_coords(ra, dec):
-    """
-    Query SDSS SpecObjID based on RA and DEC coordinates.
-    
-    Parameters:
-        ra (float): Right Ascension in degrees.
-        dec (float): Declination in degrees.
-
-    Returns:
-        int: The SpecObjID if found, or None if no match is found.
-    """
-    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
-    query = f"""
-    SELECT TOP 1 specObjID
-    FROM SpecObj
-    WHERE RA BETWEEN {ra} - 0.001 AND {ra} + 0.001
-      AND DEC BETWEEN {dec} - 0.001 AND {dec} + 0.001
-    """
-    params = {"cmd": query, "format": "json"}
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        return data[0]['Rows'][0]['specObjID']
-    except (IndexError, KeyError):
-        print("No SpecObjID found for the given RA/DEC.")
-    except Exception as e:
-        print(f"Error querying SpecObjID by coordinates: {e}")
-    return None
-
-
 # Function to get SpecObjID based on Plate, MJD, and FiberID
 def get_specobj_id_pmf(plate, mjd, fiberid):
     """

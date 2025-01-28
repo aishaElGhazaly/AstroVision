@@ -116,6 +116,125 @@ def get_object_details(object_id):
     return None
 
 
+# Function to get SpecObjID based on RA and DEC
+def get_specobj_id_coords(ra, dec):
+    """
+    Query SDSS SpecObjID based on RA and DEC coordinates.
+    
+    Parameters:
+        ra (float): Right Ascension in degrees.
+        dec (float): Declination in degrees.
+
+    Returns:
+        int: The SpecObjID if found, or None if no match is found.
+    """
+    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
+    query = f"""
+    SELECT TOP 1 specObjID
+    FROM SpecObj
+    WHERE RA BETWEEN {ra} - 0.001 AND {ra} + 0.001
+      AND DEC BETWEEN {dec} - 0.001 AND {dec} + 0.001
+    """
+    params = {"cmd": query, "format": "json"}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data[0]['Rows'][0]['specObjID']
+    except (IndexError, KeyError):
+        print("No SpecObjID found for the given RA/DEC.")
+    except Exception as e:
+        print(f"Error querying SpecObjID by coordinates: {e}")
+    return None
+
+
+# Function to get SpecObjID based on Plate, MJD, and FiberID
+def get_specobj_id_pmf(plate, mjd, fiberid):
+    """
+    Query SDSS SpecObjID based on Plate, MJD, and FiberID.
+    
+    Parameters:
+        plate (int): Plate number of the observation.
+        mjd (int): Modified Julian Date of the observation.
+        fiberid (int): Fiber ID of the observation.
+
+    Returns:
+        int: The SpecObjID if found, or None if no match is found.
+    """
+    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
+    query = f"""
+    SELECT TOP 1 specObjID
+    FROM SpecObj
+    WHERE plate = {plate} AND mjd = {mjd} AND fiberID = {fiberid}
+    """
+    params = {"cmd": query, "format": "json"}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data[0]['Rows'][0]['specObjID']
+    except (IndexError, KeyError):
+        print("No SpecObjID found for the given Plate-MJD-FiberID.")
+    except Exception as e:
+        print(f"Error querying SpecObjID by plate: {e}")
+    return None
+
+
+# Function to fetch detailed metadata for a given SpecObjID
+def get_specobj_details(specobj_id):
+    """
+    Fetch detailed metadata for an object from the SDSS SpecObj table based on SpecObjID.
+    
+    Parameters:
+        specobj_id (int): The unique SpecObjID of the object.
+
+    Returns:
+        dict: A dictionary containing object details (e.g., class, subclass, redshift) if found,
+              or None if no details are available.
+    """
+    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
+    query = f"""
+    SELECT TOP 1
+        specObjID,
+        class,
+        subclass,
+        z,
+        zErr,
+        ra,
+        dec,
+        mjd,
+        plate,
+        fiberID
+    FROM SpecObj
+    WHERE specObjID = {specobj_id}
+    """
+    params = {"cmd": query, "format": "json"}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        if "Rows" in data[0] and len(data[0]["Rows"]) > 0:
+            row = data[0]["Rows"][0]
+            return {
+                "specObjID": row["specObjID"],
+                "class": row["class"],
+                "subclass": row.get("subclass", None),
+                "redshift": row["z"],
+                "redshift_error": row["zErr"],
+                "ra": row["ra"],
+                "dec": row["dec"],
+                "mjd": row["mjd"],
+                "plate": row["plate"],
+                "fiberID": row["fiberID"]
+            }
+        else:
+            print("No metadata found for the given SpecObjID.")
+            return None
+    except Exception as e:
+        print(f"Error fetching object metadata: {e}")
+        return None
+    
+
 # Function to fetch Run, Camcol, Field, and Rerun components
 def get_run_rerun_camcol_field(ra, dec):
     """
@@ -247,3 +366,54 @@ def download_fits_files(run_camcol_field, bands, progress_callback=None):
                 print(f"Failed to download {fits_url} - HTTP {response.status_code}")
         except Exception as e:
             print(f"Error downloading {fits_url}: {e}")
+
+# Function to fetch Plate, MJD, and Fiber based on RA/DEC
+def get_plate_mjd_fiber(ra, dec):
+    """
+    Fetch Plate, MJD, and FiberID based on RA and DEC.
+    """
+    url = "http://skyserver.sdss.org/dr18/SkyServerWS/SearchTools/SqlSearch"
+    query = f"""
+    SELECT TOP 1 plate, mjd, fiberID
+    FROM SpecObj
+    WHERE RA BETWEEN {ra} - 0.001 AND {ra} + 0.001
+    AND DEC BETWEEN {dec} - 0.001 AND {dec} + 0.001
+    """
+    params = {"cmd": query, "format": "json"}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        row = data[0]['Rows'][0]
+        return row['plate'], row['mjd'], row['fiberID']
+    except (IndexError, KeyError):
+        print("No Plate-MJD-Fiber found for the given RA/DEC.")
+    except Exception as e:
+        print(f"Error fetching Plate-MJD-Fiber: {e}")
+    return None, None, None
+
+
+# Function to fetch spectrum based on Plate, MJD, and Fiber
+def fetch_spectrum_file(plate, mjd, fiber):
+    """
+    Fetch spectrum data given Plate, MJD, and FiberID using DR18.
+    """
+    url = f"https://dr18.sdss.org/sas/dr18/spectro/sdss/redux/26/spectra/lite/{plate}/spec-{plate}-{mjd}-{fiber:04d}.fits"
+    file_name = f"spec-{plate}-{mjd}-{fiber:04d}.fits"
+    try:
+        # Check if the file already exists
+        if os.path.exists(file_name):
+            print(f"File '{file_name}' already exists. Skipping download.")
+            return file_name  # Return the existing file path
+
+        # Download the spectrum file
+        response = requests.get(url)
+        response.raise_for_status()
+
+        # Save the file
+        with open(file_name, "wb") as f:
+            f.write(response.content)
+        return file_name
+    except Exception as e:
+        print(f"Error fetching spectrum data: {e}")
+        return None

@@ -5,10 +5,12 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 import sys
 
+from search import Search
 from quick_look import QuickLook
 from fits_retrieval import FITSRetrieval
 from composite_creation import CompositeCreation
-from search import Search
+from spectrogram_inspector import SpectrogramInspector
+from image_enhancement import ImageEnhancement
 
 class AstroVision(QMainWindow):
     def __init__(self):
@@ -145,7 +147,7 @@ class AstroVision(QMainWindow):
     
     def open_spectrogram_inspector(self):
         """Open the Spectrogram Inspector module in a new tab."""
-        spectro_inspector_tab = SpectroInspector(self.tab_widget)
+        spectro_inspector_tab = SpectrogramInspector(self.tab_widget)
         self.tab_widget.addTab(spectro_inspector_tab, "Spectrogram Inspector")
         self.tab_widget.setCurrentWidget(spectro_inspector_tab)
     

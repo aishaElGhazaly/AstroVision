@@ -44,7 +44,7 @@ class QuickLook(QWidget):
         # Left Section
         left_section = QFrame(main_frame)
         left_section.setStyleSheet("background-color: #4E4E4E; border: 1px solid #5A5A5A; padding: 10px;")
-        left_section.setFixedWidth(350)
+        left_section.setFixedWidth(375)
         main_layout.addWidget(left_section)
 
         # Initialize the left section
@@ -62,7 +62,7 @@ class QuickLook(QWidget):
         # Right Section
         right_section = QFrame(main_frame)
         right_section.setStyleSheet("background-color: #4E4E4E; border: 1px solid #5A5A5A; padding: 10px;")
-        right_section.setFixedWidth(350)
+        right_section.setFixedWidth(375)
         main_layout.addWidget(right_section)
 
         # Initialize the right section
@@ -78,8 +78,8 @@ class QuickLook(QWidget):
         for row, (label_text, placeholder, attr_name) in enumerate([
             ("RA (deg):", "Enter RA", "ra_entry"),
             ("DEC (deg):", "Enter DEC", "dec_entry"),
-            ("Width:", "1085", "width_entry"),
-            ("Height:", "825", "height_entry"),
+            ("Width:", "1000", "width_entry"),
+            ("Height:", "800", "height_entry"),
             ("Scale:", "0.2", "scale_entry")
         ]):
             label = QLabel(label_text)
@@ -211,8 +211,8 @@ class QuickLook(QWidget):
             # Parse and validate user inputs
             ra = float(self.ra_entry.text())
             dec = float(self.dec_entry.text())
-            width = int(self.width_entry.text() or 1085)
-            height = int(self.height_entry.text() or 825)
+            width = int(self.width_entry.text() or 1000)
+            height = int(self.height_entry.text() or 800)
             scale = float(self.scale_entry.text() or 0.2)
         except ValueError:
             print("Please enter valid numerical values.")
@@ -265,7 +265,20 @@ class QuickLook(QWidget):
                     self.specobj_id_value.setText(str(details['specObjID']) if details['specObjID'] else "Not Retrieved")
                     self.class_value.setText(details['class'] if details['class'] else "Not Retrieved")
                     self.redshift_value.setText(f"{details['redshift']:.5f}" if details['redshift'] else "Not Retrieved")
-
+                else:
+                    self.object_id_value.setText("Not Retrieved")
+                    self.ra_value.setText("Not Retrieved")
+                    self.dec_value.setText("Not Retrieved")
+                    for band in ["u", "g", "r", "i", "z"]:
+                        getattr(self, f"{band}_value").setText("Not Retrieved")
+                    self.run_value.setText("Not Retrieved")
+                    self.rerun_value.setText("Not Retrieved")
+                    self.camcol_value.setText("Not Retrieved")
+                    self.field_value.setText("Not Retrieved")
+                    self.specobj_id_value.setText("Not Retrieved")
+                    self.class_value.setText("Not Retrieved")
+                    self.redshift_value.setText("Not Retrieved")
+                    
                 self.save_button.setEnabled(True)
             except Exception as e:
                 print(f"Error displaying image: {e}")
@@ -315,17 +328,38 @@ class QuickLook(QWidget):
             self.overlay_item_mapping[current_index] = rect
 
     def save_image(self):
+        # Get the current tab index
         current_tab_index = self.quick_look_center_section.currentIndex()
-        image = self.tab_image_mapping.get(current_tab_index)
-        if not image:
-            print("No image found for the current tab.")
+        if current_tab_index == -1 or current_tab_index not in self.tab_scene_mapping:
+            print("No image to save.")
             return
 
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Image", "", "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)")
-        if file_path:
-            try:
-                image.save(file_path)
-                print(f"Image successfully saved to {file_path}")
-            except Exception as e:
-                print(f"Error saving image: {e}")
+        # Get the QGraphicsScene and the QGraphicsView associated with the current tab
+        scene = self.tab_scene_mapping[current_tab_index]
+        view = self.tab_view_mapping[current_tab_index]
+
+        # Ensure the scene has an image item
+        image_item = next((item for item in scene.items() if isinstance(item, QGraphicsPixmapItem)), None)
+        if not image_item:
+            print("No image found in the current tab.")
             return
+
+        # Get the pixmap from the image item
+        pixmap = image_item.pixmap()
+
+        # Open a file dialog to get the save location and file type
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Image", "", "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)"
+        )
+        if not file_path:
+            print("Save operation canceled.")
+            return
+
+        # Save the image using the selected file path
+        try:
+            if pixmap.save(file_path):
+                print(f"Image successfully saved to {file_path}")
+            else:
+                print("Failed to save the image. Ensure the file path is valid.")
+        except Exception as e:
+            print(f"Error saving image: {e}")

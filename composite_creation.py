@@ -188,7 +188,7 @@ class CompositeCreation(QWidget):
             }
         """)
         self.stretch_slider.setMinimum(1)  # Represents 0.1
-        self.stretch_slider.setMaximum(100)  # Represents 10.0
+        self.stretch_slider.setMaximum(50)  # Represents 5.0
         self.stretch_slider.setValue(5)  # Default is 1.0
         self.stretch_slider.valueChanged.connect(self.update_stretch_input)
 
@@ -237,7 +237,7 @@ class CompositeCreation(QWidget):
             }
         """)
         self.q_slider.setMinimum(1)
-        self.q_slider.setMaximum(100)
+        self.q_slider.setMaximum(50)
         self.q_slider.setValue(10)
         self.q_slider.valueChanged.connect(self.update_q_input)
 

@@ -129,7 +129,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-AstroVision-env/
+AV-env/
 
 # Spyder project settings
 .spyderproject
@@ -154,6 +154,9 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# txt files
+AstroVision Tests.txt
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

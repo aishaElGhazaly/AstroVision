@@ -35,6 +35,9 @@ AstroVision is a PyQt5-based desktop application for astronomical data explorati
 
 ## 📸 Preview
 
+<details>
+<summary><strong>Click to expand screenshots</strong></summary>
+
 ### Home Screen
 ![Home Screen](assets/AV-Home%20Screen.png)
 
@@ -52,6 +55,8 @@ AstroVision is a PyQt5-based desktop application for astronomical data explorati
 
 ### Spectrogram Inspector
 ![Spectrogram Inspector](assets/AV-Spectrogram%20Inspector.png)
+
+</details>
 
 ---
 

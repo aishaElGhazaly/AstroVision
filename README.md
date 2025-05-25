@@ -35,7 +35,23 @@ AstroVision is a PyQt5-based desktop application for astronomical data explorati
 
 ## 📸 Preview
 
-*Previews coming soon...*
+### Home Screen
+![Home Screen](assets/AV-Home%20Screen.png)
+
+### Search
+![Search](assets/AV-Search.png)
+
+### Quick Look
+![Quick Look](assets/AV-Quick%20Look.png)
+
+### FITS Retrieval
+![FITS Retrieval](assets/AV-FITS%20Retrieval.png)
+
+### Composite Creation
+![Composite Creation](assets/AV-Composite%20Creation.png)
+
+### Spectrogram Inspector
+![Spectrogram Inspector](assets/AV-Spectrogram%20Inspector.png)
 
 ---
 
@@ -123,4 +139,4 @@ If you're passionate about space, data or UI development, feel free to open an i
 
 ---
 
-*Last updated: April 17, 2025*
+*Last updated: May 25, 2025*
